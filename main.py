@@ -1,6 +1,7 @@
 import os
 import cv2
 import numpy as np
+import matplotlib.pyplot as plt 
 import tensorflow as tf
 from sklearn.model_selection import train_test_split
 from tensorflow.keras.models import Sequential
@@ -56,6 +57,8 @@ def load_data(images_path, labels_path):
 images, labels = load_data(images_path, labels_path)
 print(f"Loaded {len(images)} images and {len(labels)} labels")
 
+
+
 # data augmentation step to try to increase accuracy and imprpove generalization 📝
 # horrendous results idk try again 
 # train_datagen = ImageDataGenerator(
@@ -79,37 +82,45 @@ print(f"Loaded {len(images)} images and {len(labels)} labels")
 X_train, X_temp, y_train, y_temp = train_test_split(images, labels, test_size=0.2, random_state=42, shuffle=True)
 X_val, X_test, y_val, y_test = train_test_split(X_temp, y_temp, test_size=0.5, random_state=42, shuffle=True)
 
+# tried out the 60 20 20 split
+# erm kinda bad
+# X_train, X_temp, y_train, y_temp = train_test_split(images, labels, test_size=0.4, random_state=42, shuffle=True)
+# X_val, X_test, y_val, y_test = train_test_split(X_temp, y_temp, test_size=0.5, random_state=42, shuffle=True)
 
+
+# checking class imbalance📝
+print(np.unique(y_train, return_counts=True))
 
 # might be too complex leading to overfitting 📝
-# model = Sequential([
-#     Conv2D(32, (3, 3), activation='relu', input_shape=(IMG_SIZE, IMG_SIZE, 1)),
-#     MaxPooling2D(pool_size=(2, 2)),
-    
-#     Conv2D(64, (3, 3), activation='relu'),
-#     MaxPooling2D(pool_size=(2, 2)),
-    
-#     Conv2D(128, (3, 3), activation='relu'),
-#     MaxPooling2D(pool_size=(2, 2)),
-    
-#     Flatten(),
-#     Dense(128, activation='relu'),
-#     Dropout(0.5),
-#     Dense(1, activation='sigmoid')  
-# ])
-
-# simplified the model to prevent overfitting 📝
 model = Sequential([
-    Conv2D(16, (3, 3), activation='relu', input_shape=(IMG_SIZE, IMG_SIZE, 1)),
+    Conv2D(32, (3, 3), activation='relu', input_shape=(IMG_SIZE, IMG_SIZE, 1)),
     MaxPooling2D(pool_size=(2, 2)),
-
-    Conv2D(32, (3, 3), activation='relu'),
+    
+    Conv2D(64, (3, 3), activation='relu'),
     MaxPooling2D(pool_size=(2, 2)),
-
+    
+    Conv2D(128, (3, 3), activation='relu'),
+    MaxPooling2D(pool_size=(2, 2)),
+    
     Flatten(),
-    Dense(32, activation='relu'),
+    Dense(128, activation='relu'),
+    Dropout(0.5),
     Dense(1, activation='sigmoid')  
 ])
+
+# simplified the model to prevent overfitting 📝
+# kind of bad though 
+# model = Sequential([
+#     Conv2D(16, (3, 3), activation='relu', input_shape=(IMG_SIZE, IMG_SIZE, 1)),
+#     MaxPooling2D(pool_size=(2, 2)),
+
+#     Conv2D(32, (3, 3), activation='relu'),
+#     MaxPooling2D(pool_size=(2, 2)),
+
+#     Flatten(),
+#     Dense(32, activation='relu'),
+#     Dense(1, activation='sigmoid')  
+# ])
 
 
 # adding L2 regularization to help with teh models accuracy and decrease the loss 📝
@@ -146,7 +157,7 @@ early_stopping = EarlyStopping(monitor='val_loss', patience=5, restore_best_weig
 
 # asjusting the learning rate dynamically might help the accuracy 📝
 # also experimentred with a different batch size initially was 16 and then increased it to 32📝
-reduce_lr = ReduceLROnPlateau(monitor='val_loss', patience=3, factor=0.2, min_lr=1e-5)
+reduce_lr = ReduceLROnPlateau(monitor='val_loss', patience=3, factor=0.5, min_lr=1e-6)
 history = model.fit(X_train, y_train, epochs=100, batch_size=64, 
                     validation_data=(X_val, y_val), callbacks=[early_stopping, reduce_lr])
 
@@ -158,6 +169,14 @@ history = model.fit(X_train, y_train, epochs=100, batch_size=64,
 #     validation_data=val_datagen.flow(X_val, y_val, batch_size=32),  
 #     callbacks=[early_stopping, reduce_lr]
 # )
+
+
+plt.plot(history.history['accuracy'], label='Training Accuracy')
+plt.plot(history.history['val_accuracy'], label='Validation Accuracy')
+plt.xlabel('Epoch')
+plt.ylabel('Accuracy')
+plt.legend()
+plt.show()
 
 test_loss, test_acc = model.evaluate(X_test, y_test)
 print(f"Test Accuracy: {test_acc:.2f}")
