@@ -15,8 +15,8 @@ from tensorflow.keras.preprocessing.image import ImageDataGenerator
 
 
 
-images_path = "./images"
-labels_path = "./labels"
+images_path = "./data/images"
+labels_path = "./data//labels"
 IMG_SIZE = 224
 
 # for recognition maybe crop the image only to include the tumour for better accuracy in training?(data sugmentation step) 📝

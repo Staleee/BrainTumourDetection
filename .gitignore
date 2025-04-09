@@ -1,3 +1,5 @@
 /images
 /labels 
-env
+venv
+tfenv
+data/
