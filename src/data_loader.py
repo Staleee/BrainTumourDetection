@@ -1,13 +1,15 @@
-import tensorflow as tf
-import numpy as np
 import os
+import numpy as np
+import tensorflow as tf
 
 IMG_SIZE = 224
 
 def parse_label_file(label_path):
-    label_path = label_path.decode("utf-8")
-    with open(label_path, 'r') as f:
+    path = label_path.decode("utf-8")
+    with open(path, 'r') as f:
         line = f.readline().strip()
+        if not line:
+            return np.array([0, 0, 0, 0, 0], dtype=np.float32)
         class_id, cx, cy, w, h = map(float, line.split())
         x1 = (cx - w / 2) * IMG_SIZE
         y1 = (cy - h / 2) * IMG_SIZE
@@ -18,30 +20,19 @@ def parse_label_file(label_path):
 def load_image_and_label(image_path, label_path):
     image = tf.io.read_file(image_path)
     image = tf.image.decode_jpeg(image, channels=1)
-    image = tf.image.resize(image, (IMG_SIZE, IMG_SIZE))
-    image = tf.cast(image, tf.float32) / 255.0
+    image = tf.image.resize(image, (IMG_SIZE, IMG_SIZE)) / 255.0
     label = tf.numpy_function(parse_label_file, [label_path], tf.float32)
     label.set_shape([5])
     return image, label
 
 def create_dataset(image_dir, label_dir):
-    image_paths, label_paths, test_images = [], [], []
+    image_files = [f for f in os.listdir(image_dir) if f.endswith('.jpg')]
+    image_paths = [os.path.join(image_dir, f) for f in image_files]
+    label_paths = [os.path.join(label_dir, f.replace('.jpg', '.txt')) for f in image_files]
 
-    for fname in os.listdir(image_dir):
-        if fname.endswith('.jpg'):
-            img_path = os.path.join(image_dir, fname)
-            lbl_path = os.path.join(label_dir, fname.replace(".jpg", ".txt"))
+    valid_pairs = [(img, lbl) for img, lbl in zip(image_paths, label_paths) if os.path.exists(lbl)]
+    image_paths, label_paths = zip(*valid_pairs)
 
-            if os.path.exists(lbl_path):
-                image_paths.append(img_path)
-                label_paths.append(lbl_path)
-            else:
-                test_images.append(img_path)
-
-    labeled_ds = tf.data.Dataset.from_tensor_slices((image_paths, label_paths))
-    labeled_ds = labeled_ds.map(load_image_and_label, num_parallel_calls=tf.data.AUTOTUNE)
-
-    test_ds = tf.data.Dataset.from_tensor_slices(test_images)
-    test_ds = test_ds.map(lambda x: load_image_and_label(x, x), num_parallel_calls=tf.data.AUTOTUNE)
-
-    return labeled_ds, test_ds
+    dataset = tf.data.Dataset.from_tensor_slices((list(image_paths), list(label_paths)))
+    dataset = dataset.map(load_image_and_label, num_parallel_calls=tf.data.AUTOTUNE)
+    return dataset
