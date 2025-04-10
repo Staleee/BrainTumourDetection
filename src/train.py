@@ -12,7 +12,6 @@ IMG_SIZE = 224
 
 def load_data(images_path, labels_path):
     images, labels_cls, labels_bbox = [], [], []
-
     for filename in os.listdir(images_path):
         if filename.endswith(".jpg"):
             img_path = os.path.join(images_path, filename)
@@ -34,13 +33,14 @@ def load_data(images_path, labels_path):
 
     return np.array(images), np.array(labels_cls), np.array(labels_bbox)
 
-# Load your data
+print("Loading data")
 images, class_labels, bbox_labels = load_data("data/images", "data/labels")
 
 X_train, X_val, y_train_cls, y_val_cls, y_train_bbox, y_val_bbox = train_test_split(
     images, class_labels, bbox_labels, test_size=0.2, random_state=42)
 
-# Model
+# Build model
+print("Building model")
 model = Sequential([
     Conv2D(32, (3,3), activation='relu', input_shape=(IMG_SIZE, IMG_SIZE, 1)),
     MaxPooling2D(2,2),
@@ -51,9 +51,8 @@ model = Sequential([
     Flatten(),
     Dense(128, activation='relu'),
     Dropout(0.5),
-    Dense(5, activation='linear')  # 1 for class, 4 for bbox
+    Dense(5, activation='linear')  # [class, bbox]
 ])
-
 
 def custom_loss(y_true, y_pred):
     cls_true = y_true[:, 0]
@@ -67,44 +66,54 @@ def custom_loss(y_true, y_pred):
 
     return cls_loss + 0.05 * bbox_loss
 
-model.compile(optimizer=Adam(1e-4), loss=custom_loss, metrics=['accuracy'])
+model.compile(optimizer=Adam(2e-4), loss=custom_loss, metrics=['accuracy'])
 
-# Pack both outputs together
+# Merge labels
 y_train = np.concatenate([y_train_cls.reshape(-1,1), y_train_bbox], axis=1)
 y_val = np.concatenate([y_val_cls.reshape(-1,1), y_val_bbox], axis=1)
 
-early_stop = EarlyStopping(patience=20, restore_best_weights=True)
+early_stop = EarlyStopping(patience=5, restore_best_weights=True)
 reduce_lr = ReduceLROnPlateau(monitor='val_loss', patience=5, factor=0.7, min_lr=1e-6)
 
+# Train
+print("Training")
+history = model.fit(
+    X_train, y_train,
+    validation_data=(X_val, y_val),
+    epochs=100,
+    batch_size=64,
+    callbacks=[early_stop, reduce_lr]
+)
 
-history = model.fit(X_train, y_train, validation_data=(X_val, y_val),
-                    epochs=50, batch_size=32, callbacks=[early_stop, reduce_lr])
+# Save model before predict
+print("Saving model")
+os.makedirs("saved_models", exist_ok=True)
+model.save("saved_models/model.keras")
+model.save_weights("saved_models/model_weights.weights.h5")
+
+# Predict
+print("Predicting")
+preds = model.predict(X_val, verbose=1)
 
 # Accuracy
-preds = model.predict(X_val)
 cls_preds = tf.round(tf.keras.activations.sigmoid(preds[:, 0])).numpy().flatten()
 val_cls_true = y_val_cls.flatten()
 acc = np.mean(cls_preds == val_cls_true)
 print(f"\nValidation Classification Accuracy: {acc:.2f}")
 
-# MAE for BBoxes
+# MAE
 mae = np.mean(np.abs(preds[:, 1:] - y_val_bbox))
 print(f"Validation Bounding Box MAE: {mae:.2f}")
 
-# Plot Accuracy
+# Accuracy plot
 plt.plot(history.history['accuracy'], label="Train Acc")
 plt.plot(history.history['val_accuracy'], label="Val Acc")
 plt.legend()
 plt.title("Classification Accuracy")
 plt.show()
 
-# Plot Loss
+# Loss plot
 plt.plot(history.history['loss'], label="Train Loss")
 plt.title("Loss")
 plt.legend()
 plt.show()
-
-# Save model
-os.makedirs("saved_models", exist_ok=True)
-model.save("saved_models/dual_head_model.keras")
-model.save_weights("saved_models/dual_head_model_weights.h5")
